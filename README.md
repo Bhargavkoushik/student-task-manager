@@ -402,5 +402,3 @@ Built with ❤️ for students who want to stay organized and productive.
 ---
 
 **Happy Task Managing! 📚✨**
-#   s t u d e n t - t a s k - m a n a g e r  
- 
