@@ -30,6 +30,65 @@
     padding: var(--spacing-md);
   }
 }
+
+/* Time selection UI */
+.time-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.time-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.time-pill {
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.time-pill:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+}
+
+.time-pill.selected {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.2);
+}
+
+.time-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.time-manual {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+}
+
+.time-manual input[type="time"] {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
 /* Multiple Reminders Section */
 .reminders-section {
   margin-top: var(--spacing-lg);

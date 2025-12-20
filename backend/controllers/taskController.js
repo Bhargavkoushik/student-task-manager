@@ -1,4 +1,6 @@
 const Task = require('../models/Task');
+const User = require('../models/User');
+const { sendN8NWebhookNotification } = require('../services/emailService');
 
 /**
  * @desc    Get all tasks
@@ -98,6 +100,17 @@ const createTask = async (req, res) => {
       reminders: processedReminders
     });
 
+    // Get user email and send N8N webhook notification
+    try {
+      const user = await User.findById(req.user.id);
+      if (user && user.email) {
+        await sendN8NWebhookNotification(user.email, title, priority);
+      }
+    } catch (webhookError) {
+      // Log but don't fail the task creation if webhook fails
+      console.error('Webhook notification error:', webhookError.message);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Task created successfully',
@@ -116,10 +129,14 @@ const createTask = async (req, res) => {
  * @desc    Update task
  * @route   PUT /api/tasks/:id
  * @access  Public
+ * 
+ * Special handling for completed tasks with reminders:
+ * If task is being marked as complete and has a reminderAt field,
+ * automatically reschedule based on priority level.
  */
 const updateTask = async (req, res) => {
   try {
-    const { title, description, priority, dueDate, completed, reminders } = req.body;
+    const { title, description, priority, dueDate, completed, reminders, reminderAt } = req.body;
     
     // Find task by ID and verify ownership
     let task = await Task.findOne({ _id: req.params.id, user: req.user.id });
@@ -143,6 +160,27 @@ const updateTask = async (req, res) => {
         }))
       : [];
 
+    // Auto-reschedule reminder based on priority when task is completed
+    let newReminderAt = reminderAt;
+    if (completed && task.reminderAt && !task.completed) {
+      // Task is being marked as complete and has an active reminder
+      const priorityRescheduleMap = {
+        low: 30,      // Reschedule 30 minutes later
+        medium: 1440, // Reschedule 1 day later
+        high: 10080   // Reschedule 7 days later
+      };
+
+      const priorityLevel = priority || task.priority || 'medium';
+      const minutesToAdd = priorityRescheduleMap[priorityLevel] || 1440;
+      
+      const currentReminderAt = new Date(task.reminderAt);
+      const newTime = new Date(currentReminderAt.getTime() + minutesToAdd * 60000);
+      
+      newReminderAt = newTime;
+      
+      console.log(`📅 Auto-rescheduled reminder for "${title}" (Priority: ${priorityLevel}): ${currentReminderAt.toLocaleString()} → ${newTime.toLocaleString()}`);
+    }
+
     // Update task with new values
     task = await Task.findByIdAndUpdate(
       req.params.id,
@@ -152,13 +190,26 @@ const updateTask = async (req, res) => {
         priority,
         dueDate,
         completed,
-        reminders: processedReminders
+        reminders: processedReminders,
+        reminderAt: newReminderAt,
+        notified: false // Reset notified flag if reminder was rescheduled
       },
       {
         new: true,
         runValidators: true
       }
     );
+
+    // Get user email and send N8N webhook notification on task update
+    try {
+      const user = await User.findById(req.user.id);
+      if (user && user.email) {
+        await sendN8NWebhookNotification(user.email, title || task.title, priority || task.priority);
+      }
+    } catch (webhookError) {
+      // Log but don't fail the task update if webhook fails
+      console.error('Webhook notification error:', webhookError.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -284,11 +335,135 @@ const updateReminderTriggered = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get pending reminders for the current user
+ * @route   GET /api/tasks/pending-reminders
+ * @access  Public
+ */
+const getPendingReminders = async (req, res) => {
+  try {
+    const now = new Date();
+    
+    // Find tasks with reminderAt that should trigger now
+    const tasksWithReminders = await Task.find({
+      user: req.user.id,
+      reminderAt: { $lte: now },
+      notified: false,
+      completed: false
+    });
+
+    res.status(200).json({
+      success: true,
+      count: tasksWithReminders.length,
+      data: tasksWithReminders
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve pending reminders',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get reminders that have fired and need UI display
+ * @route   GET /api/tasks/fired-reminders
+ * @access  Public
+ */
+const getFiredReminders = async (req, res) => {
+  try {
+    const tasks = await Task.find({
+      user: req.user.id,
+      completed: false,
+      uiPending: true
+    }).sort({ reminderAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: tasks.length,
+      data: tasks
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve fired reminders',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Handle reminder progress after ringtone ends or is stopped
+ * @route   POST /api/tasks/:id/reminder-progress
+ * @access  Public
+ */
+const progressReminder = async (req, res) => {
+  try {
+    const { stopped } = req.body; // boolean; informational only
+    const task = await Task.findOne({ _id: req.params.id, user: req.user.id });
+
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    if (task.completed) {
+      return res.status(200).json({ success: true, message: 'Task already completed', data: task });
+    }
+
+    // Compute max reminders based on priority
+    const maxRemindersMap = { low: 1, medium: 2, high: 3 };
+    const maxReminders = maxRemindersMap[task.priority] || 1;
+
+    // Increment reminder count
+    const newCount = (task.reminderCount || 0) + 1;
+
+    if (newCount < maxReminders) {
+      // Schedule next reminder in +1 hour
+      const nextAt = new Date(Date.now() + 60 * 60 * 1000);
+      task.reminderCount = newCount;
+      task.reminderAt = nextAt;
+      task.uiPending = false; // UI handled
+      task.notified = false;  // allow next email when it fires
+      await task.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Reminder progressed and rescheduled +1 hour',
+        data: task
+      });
+    } else {
+      // Max reminders reached – mark completed
+      task.reminderCount = newCount;
+      task.completed = true;
+      task.uiPending = false;
+      task.reminderAt = null;
+      task.notified = false;
+      await task.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Max reminders reached – task completed',
+        data: task
+      });
+    }
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Failed to progress reminder',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getTasks,
   getTaskById,
   createTask,
   updateTask,
   deleteTask,
-  updateReminderTriggered
+  updateReminderTriggered,
+  getPendingReminders,
+  getFiredReminders,
+  progressReminder
 };

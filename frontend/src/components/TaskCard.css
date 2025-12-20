@@ -156,7 +156,33 @@
   display: inline-block;
 }
 
-.task-title {
+/* Reminder Reschedule Info */
+.reminder-reschedule-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background-color: #dbeafe;
+  color: #1e40af;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-left: 3px solid #3b82f6;
+}
+
+.reschedule-icon {
+  font-size: 1rem;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.reschedule-text {
+  flex: 1;
   font-size: 1.125rem;
   font-weight: 600;
   color: var(--text-primary);

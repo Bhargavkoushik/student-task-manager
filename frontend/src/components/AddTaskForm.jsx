@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import './AddTaskForm.css';
 
 /**
@@ -13,6 +14,8 @@ const AddTaskForm = ({ onAddTask }) => {
     dueDate: ''
   });
 
+  const quickTimes = ['08:00', '09:00', '12:00', '15:00', '18:00', '21:00'];
+
   const [tempReminder, setTempReminder] = useState({
     daysBefore: '',
     reminderTime: '09:00',
@@ -22,6 +25,21 @@ const AddTaskForm = ({ onAddTask }) => {
   const [addedReminders, setAddedReminders] = useState([]);
   const [customReminderDays, setCustomReminderDays] = useState('');
   const [errors, setErrors] = useState({});
+
+  const handleTimeChange = (e) => {
+    const value = e.target.value;
+    setTempReminder(prev => ({
+      ...prev,
+      reminderTime: value
+    }));
+  };
+
+  const handleQuickTimeSelect = (time) => {
+    setTempReminder(prev => ({
+      ...prev,
+      reminderTime: time
+    }));
+  };
 
   // Handle input changes
   const handleChange = (e) => {
@@ -38,10 +56,6 @@ const AddTaskForm = ({ onAddTask }) => {
     // Handle temp reminder fields
     if (name === 'tempReminderDaysBefore') {
       setTempReminder(prev => ({ ...prev, daysBefore: value }));
-      return;
-    }
-    if (name === 'tempReminderTime') {
-      setTempReminder(prev => ({ ...prev, reminderTime: value }));
       return;
     }
     if (name === 'tempRingtone') {
@@ -98,7 +112,10 @@ const AddTaskForm = ({ onAddTask }) => {
     }
 
     // Add the reminder to the array
+    const reminderId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
     setAddedReminders(prev => [...prev, {
+      id: reminderId,
       daysBefore,
       reminderTime: tempReminder.reminderTime,
       ringtone: tempReminder.ringtone
@@ -118,8 +135,8 @@ const AddTaskForm = ({ onAddTask }) => {
     });
   };
 
-  const removeReminder = (index) => {
-    setAddedReminders(prev => prev.filter((_, i) => i !== index));
+  const removeReminder = (id) => {
+    setAddedReminders(prev => prev.filter(reminder => reminder.id !== id));
   };
 
   // Handle form submission
@@ -260,16 +277,32 @@ const AddTaskForm = ({ onAddTask }) => {
             </div>
 
             <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="tempReminderTime">Time</label>
-                <input
-                  type="time"
-                  id="tempReminderTime"
-                  name="tempReminderTime"
-                  value={tempReminder.reminderTime}
-                  onChange={handleChange}
-                  disabled={!tempReminder.daysBefore}
-                />
+              <div className="form-group time-picker-group">
+                <label htmlFor="tempReminderTime">Reminder Time</label>
+                <div className="time-pills">
+                  {quickTimes.map(time => (
+                    <button
+                      key={time}
+                      type="button"
+                      className={`time-pill ${tempReminder.reminderTime === time ? 'selected' : ''}`}
+                      onClick={() => handleQuickTimeSelect(time)}
+                      disabled={!tempReminder.daysBefore}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
+                <div className="time-manual">
+                  <input
+                    type="time"
+                    id="tempReminderTime"
+                    name="tempReminderTime"
+                    value={tempReminder.reminderTime}
+                    onChange={handleTimeChange}
+                    disabled={!tempReminder.daysBefore}
+                  />
+                  <small>Or set a custom time (24h)</small>
+                </div>
               </div>
 
               <div className="form-group">
@@ -302,8 +335,8 @@ const AddTaskForm = ({ onAddTask }) => {
           {addedReminders.length > 0 && (
             <div className="reminders-list">
               <h4>Added Reminders ({addedReminders.length})</h4>
-              {addedReminders.map((reminder, index) => (
-                <div key={index} className="reminder-item">
+              {addedReminders.map((reminder) => (
+                <div key={reminder.id} className="reminder-item">
                   <div className="reminder-info">
                     <span>{reminder.daysBefore} day(s) before at {reminder.reminderTime}</span>
                     <span className="ringtone-badge">{reminder.ringtone}</span>
@@ -311,7 +344,7 @@ const AddTaskForm = ({ onAddTask }) => {
                   <button
                     type="button"
                     className="btn-remove"
-                    onClick={() => removeReminder(index)}
+                    onClick={() => removeReminder(reminder.id)}
                   >
                     ✕
                   </button>
@@ -327,6 +360,10 @@ const AddTaskForm = ({ onAddTask }) => {
       </form>
     </div>
   );
+};
+
+AddTaskForm.propTypes = {
+  onAddTask: PropTypes.func.isRequired
 };
 
 export default AddTaskForm;

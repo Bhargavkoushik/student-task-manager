@@ -45,6 +45,19 @@ const TaskCard = ({ task, onToggleComplete, onDelete, onEdit, reminderAlert = fa
     return new Date(task.dueDate) < new Date();
   };
 
+  // Get priority-based reschedule message
+  const getRescheduleMessage = () => {
+    if (!task.reminderAt) return null;
+    
+    const messages = {
+      low: '⏰ Will reschedule 30 mins later if completed',
+      medium: '📅 Will reschedule 1 day later if completed',
+      high: '📆 Will reschedule 1 week later if completed'
+    };
+    
+    return messages[task.priority] || messages.medium;
+  };
+
   return (
     <div className={`task-card ${task.completed ? 'completed' : ''} ${isOverdue() ? 'overdue' : ''} ${task.important ? 'important' : ''}`}>
       <div className="task-header">
@@ -54,6 +67,7 @@ const TaskCard = ({ task, onToggleComplete, onDelete, onEdit, reminderAlert = fa
             checked={task.completed}
             onChange={() => onToggleComplete(task._id, !task.completed)}
             id={`task-${task._id}`}
+            title={!task.completed && task.reminderAt ? getRescheduleMessage() : ''}
           />
           <label htmlFor={`task-${task._id}`}></label>
         </div>
@@ -69,6 +83,15 @@ const TaskCard = ({ task, onToggleComplete, onDelete, onEdit, reminderAlert = fa
         {task.description && (
           <p className="task-description">{task.description}</p>
         )}
+        
+        {/* Show reschedule info if task has reminder */}
+        {task.reminderAt && !task.completed && (
+          <div className="reminder-reschedule-info">
+            <span className="reschedule-icon">🔄</span>
+            <span className="reschedule-text">{getRescheduleMessage()}</span>
+          </div>
+        )}
+        
         {task.reminders && task.reminders.length > 0 && task.dueDate && (
           <div className="reminders-meta">
             <span className="reminder-icon">⏰</span>

@@ -6,12 +6,16 @@ import AddTaskForm from './components/AddTaskForm';
 import FilterBar from './components/FilterBar';
 import TaskList from './components/TaskList';
 import Modal from './components/Modal';
+import ReminderPopup from './components/ReminderPopup';
+import Notification from './components/Notification';
+import useRingtone from './hooks/useRingtone';
 import taskService, { authService } from './services/taskService';
 import './App.css';
 
 /**
  * Main App Component
  * Manages application state and orchestrates all child components
+ * Includes priority-based reminder system with email, ringtone, and UI notifications
  */
 function App() {
   // State management
@@ -26,6 +30,17 @@ function App() {
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
+  
+  // New reminder system state
+  const [showReminderPopup, setShowReminderPopup] = useState(false);
+  const [activeReminderTask, setActiveReminderTask] = useState(null);
+  const [notification, setNotification] = useState({ message: '', type: '' });
+  const processedRemindersRef = useRef(new Set());
+  
+  // Ringtone hook
+  const { scheduleRingtones, stopRingtone: stopRingtoneHook, stopAndEnd, initAudioContext } = useRingtone();
+  
+  // Legacy reminder state (keeping for backward compatibility)
   const [reminderAlertIds, setReminderAlertIds] = useState([]);
   const [ringstoneStopped, setRingstoneStopped] = useState(false);
   const [showReminderAlert, setShowReminderAlert] = useState(true);
@@ -56,12 +71,118 @@ function App() {
     if (Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
+    // Initialize audio context on first user interaction
+    initAudioContext();
   }, [isAuthenticated]);
 
   // Apply filters and search whenever tasks, filter, or search query changes
   useEffect(() => {
     applyFiltersAndSearch();
   }, [tasks, filter, searchQuery]);
+
+  /**
+   * NEW: Check for pending reminders using the backend API
+   * Displays ReminderPopup, triggers browser alert, and plays ringtone
+   */
+  const checkPendingReminders = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      // Fetch fired reminders from backend (need UI display)
+      const response = await taskService.getFiredReminders();
+      const pendingTasks = response.data || [];
+      
+      // Process each pending reminder
+      for (const task of pendingTasks) {
+        const reminderId = `${task._id}-${task.reminderAt}`;
+        
+        // Skip if already processed
+        if (processedRemindersRef.current.has(reminderId)) {
+          continue;
+        }
+        
+        // Mark as processed
+        processedRemindersRef.current.add(reminderId);
+        
+        console.log(`📢 Processing reminder for task: ${task.title}`);
+        
+        // 1. Show browser alert (must be called before other async operations)
+        if (window.alert) {
+          setTimeout(() => {
+            alert(`⏰ Reminder: ${task.title} is due!`);
+          }, 100);
+        }
+        
+        // 2. Show browser notification
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification('⏰ Task Reminder', {
+            body: `${task.title}\n${task.description || ''}\nPriority: ${task.priority.toUpperCase()}`,
+            icon: '/favicon.ico',
+            tag: reminderId
+          });
+        }
+        
+        // 3. Display ReminderPopup component
+        setActiveReminderTask(task);
+        setShowReminderPopup(true);
+        
+        // 4. Play single 10s ringtone; when it ends, progress reminder in backend
+        const onRingEnd = async (endedTask) => {
+          try {
+            const result = await taskService.reminderProgress(endedTask._id, { stopped: false });
+            // Update tasks list
+            await fetchTasks();
+
+            // Close popup
+            setShowReminderPopup(false);
+            setActiveReminderTask(null);
+
+            // Show notification based on result
+            if (result?.data?.completed) {
+              setNotification({ message: 'Task completed after max reminders ✅', type: 'success' });
+            } else {
+              setNotification({ message: 'Next reminder scheduled in 1 hour ⏳', type: 'info' });
+            }
+            setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+          } catch (err) {
+            console.error('Failed to progress reminder:', err);
+          }
+        };
+
+        scheduleRingtones(task, onRingEnd);
+      }
+      
+      // Refresh tasks to get updated status
+      if (pendingTasks.length > 0) {
+        await fetchTasks();
+      }
+      
+    } catch (error) {
+      console.error('Error checking pending reminders:', error);
+    }
+  };
+
+  /**
+   * Handle "Stop Ringtone" button click from ReminderPopup
+   */
+  const handleStopRingtone = async () => {
+    try {
+      // Stop and signal end to progress reminder
+      stopAndEnd();
+
+      // Close the popup immediately
+      setShowReminderPopup(false);
+      setActiveReminderTask(null);
+
+      // Show success toast
+      setNotification({ message: 'Ringtone stopped successfully 🔕', type: 'success' });
+      setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+
+      // Backend progress will be handled by the onEnd callback from the hook
+    } catch (err) {
+      console.error('Failed to stop ringtone:', err);
+    }
+  };
 
   /**
    * Fetch all tasks from API
@@ -143,16 +264,39 @@ function App() {
   /**
    * Toggle task completion status
    */
+  /**
+   * Toggle task completion status
+   * If task has a reminder, it will be auto-rescheduled based on priority
+   */
   const handleToggleComplete = async (taskId, completed) => {
     try {
       const taskToUpdate = tasks.find(t => t._id === taskId);
       const updatedTask = await taskService.updateTask(taskId, {
         ...taskToUpdate,
-        completed
+        completed,
+        reminderAt: taskToUpdate.reminderAt, // Pass reminder for auto-reschedule logic
+        priority: taskToUpdate.priority      // Pass priority for reschedule calculation
       });
       setTasks(prev =>
         prev.map(task => (task._id === taskId ? updatedTask : task))
       );
+
+      // Show notification about reminder rescheduling if applicable
+      if (completed && taskToUpdate.reminderAt && !taskToUpdate.completed) {
+        const priorityMessages = {
+          low: '⏰ Reminder rescheduled for 30 minutes later',
+          medium: '⏰ Reminder rescheduled for 1 day later',
+          high: '⏰ Reminder rescheduled for 1 week later'
+        };
+        const priority = taskToUpdate.priority || 'medium';
+        setNotification({
+          message: priorityMessages[priority] || priorityMessages.medium,
+          type: 'info'
+        });
+        setTimeout(() => {
+          setNotification({ message: '', type: '' });
+        }, 4000);
+      }
     } catch (err) {
       setError('Failed to update task. Please try again.');
       console.error('Error updating task:', err);
@@ -421,6 +565,22 @@ function App() {
   }, [tasks, isAuthenticated]);
 
   /**
+   * NEW: Periodically check for pending reminders from backend
+   * Checks every 30 seconds for new reminders
+   */
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    // Check immediately
+    checkPendingReminders();
+    
+    // Then check every 30 seconds
+    const intervalId = setInterval(checkPendingReminders, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated]);
+
+  /**
    * Close modal
    */
   const handleCloseModal = () => {
@@ -459,6 +619,23 @@ function App() {
               <span>{error}</span>
               <button onClick={() => setError(null)}>×</button>
             </div>
+          )}
+
+          {/* NEW: ReminderPopup Component */}
+          {showReminderPopup && activeReminderTask && (
+            <ReminderPopup 
+              task={activeReminderTask}
+              onStopRingtone={handleStopRingtone}
+            />
+          )}
+
+          {/* NEW: Notification Component */}
+          {notification.message && (
+            <Notification
+              message={notification.message}
+              type={notification.type}
+              onClose={() => setNotification({ message: '', type: '' })}
+            />
           )}
 
           {/* Ringtone Alert Banner */}
