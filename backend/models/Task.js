@@ -52,6 +52,24 @@ const taskSchema = new mongoose.Schema(
         type: Date
       }
     }],
+    // New fields for priority-based reminder feature
+    reminderAt: {
+      type: Date
+    },
+    notified: {
+      type: Boolean,
+      default: false
+    },
+    // Counts how many reminders have been fired and handled by the user
+    reminderCount: {
+      type: Number,
+      default: 0
+    },
+    // Indicates a reminder has fired and the UI should show it
+    uiPending: {
+      type: Boolean,
+      default: false
+    },
     important: {
       type: Boolean,
       default: false

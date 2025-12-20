@@ -123,6 +123,24 @@ const taskService = {
   updateReminderTriggered: async (id, reminderIndex) => {
     const response = await api.put(`/tasks/${id}/reminder-triggered`, { reminderIndex });
     return response.data;
+  },
+
+  // Get pending reminders (new endpoint)
+  getPendingReminders: async () => {
+    const response = await api.get('/tasks/pending-reminders');
+    return response.data;
+  },
+
+  // Get reminders that have fired and need UI display
+  getFiredReminders: async () => {
+    const response = await api.get('/tasks/fired-reminders');
+    return response.data;
+  },
+
+  // Progress reminder after ringtone ends or is stopped
+  reminderProgress: async (id, { stopped = false } = {}) => {
+    const response = await api.post(`/tasks/${id}/reminder-progress`, { stopped });
+    return response.data;
   }
 };
 
