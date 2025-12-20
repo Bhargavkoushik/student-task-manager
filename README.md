@@ -3,9 +3,11 @@
 A full-stack web application built with the MERN stack that helps students organize and track their daily academic tasks efficiently.
 
 ##🌐 Live Deployment
--Frontend (Vercel):
+
+Frontend (Vercel):
 🔗 https://student-task-manager-wine.vercel.app/
--Backend API (Render):
+
+Backend API (Render):
 🔗 https://student-task-manager-l367.onrender.com/
 
 ##☁️ Production Architecture
@@ -417,4 +419,5 @@ Built with ❤️ for students who want to stay organized and productive.
 ---
 
 **Happy Task Managing! 📚✨**
+
 
