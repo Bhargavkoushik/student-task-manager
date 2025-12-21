@@ -56,6 +56,7 @@ Design and develop a simple, responsive task management system that enables stud
 - **Priority Levels**: Categorize tasks as low, medium, or high priority
 - **Due Dates**: Set and track task deadlines
 - **Task Details**: Add descriptions for additional context
+- **Timezone Awareness**: Automatic timezone detection with UTC storage for global compatibility
 
 ### User Experience
 - **Filtering**: View all tasks, only completed, or only pending tasks
@@ -65,12 +66,6 @@ Design and develop a simple, responsive task management system that enables stud
 - **Task Statistics**: Dashboard showing total, pending, and completed tasks
 - **Responsive Design**: Works seamlessly on desktop, tablet, and mobile devices
 
-### Additional Features
-- **Form Validation**: Client-side validation with helpful error messages
-- **Empty States**: User-friendly messages when no tasks exist
-- **Error Handling**: Graceful error handling with user feedback
-- **Loading States**: Visual feedback during data operations
-- **Confirmation Dialogs**: Prevent accidental task deletions
 
 ## 🛠️ Tech Stack
 
@@ -315,20 +310,6 @@ smart-task-management/
 ### Overdue Tasks
 - Tasks with past due dates are highlighted with a pink background
 - The due date text appears in red for overdue tasks
-
-## 📸 Screenshots
-
-### Main Dashboard
-![Dashboard showing task list with filters and statistics]
-
-### Add Task Form
-![Form for creating new tasks with validation]
-
-### Edit Task Modal
-![Modal dialog for editing existing tasks]
-
-### Mobile View
-![Responsive design on mobile devices]
 
 ## 🧪 Testing
 

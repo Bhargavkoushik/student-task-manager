@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { formatDateTimeForDisplay } from '../utils/timezoneUtils';
 import './ReminderPopup.css';
 
 /**
@@ -7,20 +8,8 @@ import './ReminderPopup.css';
  * Displays a popup notification for task reminders with priority-based styling
  * Includes a "Stop Ringtone" button to dismiss the notification
  */
-const ReminderPopup = ({ task, onStopRingtone }) => {
+const ReminderPopup = ({ task, onStopRingtone, onSnooze }) => {
   if (!task) return null;
-
-  // Format the due date for display
-  const formatDate = (date) => {
-    if (!date) return 'Not set';
-    return new Date(date).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   // Get priority color for styling
   const priorityColors = {
@@ -34,27 +23,63 @@ const ReminderPopup = ({ task, onStopRingtone }) => {
   return (
     <div className="reminder-popup-overlay">
       <div className="reminder-popup-container">
-        {/* Header with priority indicator */}
-        <div className="reminder-popup-header" style={{ borderTopColor: priorityColor }}>
-          <div className="reminder-icon">⏰</div>
-          <h2 className="reminder-title">Task Reminder</h2>
+        {/* Header with priority indicator and stop button */}
+        <div className="reminder-popup-header">
+          <div className="reminder-header-left">
+            <div className="reminder-icon">⏰</div>
+            <h2 className="reminder-title">⚡ Reminder Active</h2>
+          </div>
+          <div className="reminder-actions">
+            <button 
+              className="reminder-stop-button"
+              onClick={onStopRingtone}
+              aria-label="Stop ringtone and close reminder"
+            >
+              🔕 Stop Ringtone
+            </button>
+            {onSnooze && (
+              <div className="snooze-options">
+                <button
+                  className="reminder-snooze-button snooze-10"
+                  onClick={() => onSnooze(10)}
+                  aria-label="Snooze reminder for 10 minutes"
+                >
+                  😴 10 min
+                </button>
+                <button
+                  className="reminder-snooze-button snooze-30"
+                  onClick={() => onSnooze(30)}
+                  aria-label="Snooze reminder for 30 minutes"
+                >
+                  😴 30 min
+                </button>
+                <button
+                  className="reminder-snooze-button snooze-60"
+                  onClick={() => onSnooze(60)}
+                  aria-label="Snooze reminder for 1 hour"
+                >
+                  😴 1 hour
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Task Details */}
         <div className="reminder-popup-body">
           <div className="reminder-task-title">
-            <strong>{task.title}</strong>
+            📋 {task.title}
           </div>
 
           {task.description && (
             <div className="reminder-field">
-              <span className="reminder-label">Description:</span>
+              <span className="reminder-label">Description</span>
               <p className="reminder-value">{task.description}</p>
             </div>
           )}
 
           <div className="reminder-field">
-            <span className="reminder-label">Priority:</span>
+            <span className="reminder-label">Priority</span>
             <span 
               className="reminder-priority-badge"
               style={{ backgroundColor: priorityColor }}
@@ -64,27 +89,16 @@ const ReminderPopup = ({ task, onStopRingtone }) => {
           </div>
 
           <div className="reminder-field">
-            <span className="reminder-label">Due Date:</span>
-            <span className="reminder-value">{formatDate(task.dueDate)}</span>
+            <span className="reminder-label">Due Date</span>
+            <span className="reminder-value">{formatDateTimeForDisplay(task.dueDate)}</span>
           </div>
 
           {task.reminderAt && (
             <div className="reminder-field">
-              <span className="reminder-label">Reminder Time:</span>
-              <span className="reminder-value">{formatDate(task.reminderAt)}</span>
+              <span className="reminder-label">Reminder Time</span>
+              <span className="reminder-value">{formatDateTimeForDisplay(task.reminderAt)}</span>
             </div>
           )}
-        </div>
-
-        {/* Footer with action button */}
-        <div className="reminder-popup-footer">
-          <button 
-            className="reminder-stop-button"
-            onClick={onStopRingtone}
-            aria-label="Stop ringtone and close reminder"
-          >
-            🔕 Stop Ringtone
-          </button>
         </div>
       </div>
     </div>
@@ -99,7 +113,8 @@ ReminderPopup.propTypes = {
     dueDate: PropTypes.string,
     reminderAt: PropTypes.string
   }),
-  onStopRingtone: PropTypes.func.isRequired
+  onStopRingtone: PropTypes.func.isRequired,
+  onSnooze: PropTypes.func
 };
 
 export default ReminderPopup;

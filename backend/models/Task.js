@@ -70,6 +70,16 @@ const taskSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    // Last time a reminder rang (audio attempted)
+    lastRingAt: {
+      type: Date
+    },
+    // Small history of reminder events for debugging/UX clarity
+    ringHistory: [{
+      at: { type: Date, default: Date.now },
+      action: { type: String, enum: ['auto', 'stopped', 'snoozed'], default: 'auto' },
+      note: { type: String, maxlength: 200 }
+    }],
     important: {
       type: Boolean,
       default: false

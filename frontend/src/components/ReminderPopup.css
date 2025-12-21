@@ -1,83 +1,92 @@
-/* ReminderPopup.css - Styling for the task reminder popup component */
+/* ReminderPopup.css - Styling for the task reminder banner component */
 
 .reminder-popup-overlay {
   position: fixed;
-  top: 0;
+  top: 80px;
   left: 0;
   right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
   z-index: 10000;
-  animation: fadeIn 0.3s ease-in-out;
+  animation: slideDown 0.4s ease-out;
+  padding: 0 20px;
 }
 
 .reminder-popup-container {
-  background-color: white;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border: 3px solid #ef4444;
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  animation: slideIn 0.4s ease-out;
+  box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3);
+  max-width: 1200px;
+  margin: 0 auto;
+  color: #111827;
+  animation: pulse 2s ease-in-out infinite;
 }
 
 .reminder-popup-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 20px;
-  border-radius: 12px 12px 0 0;
-  border-top: 4px solid #ef4444;
+  background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+  color: #f8fafc;
+  padding: 16px 24px;
+  border-radius: 8px 8px 0 0;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
+.reminder-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
 .reminder-icon {
-  font-size: 32px;
-  animation: ring 1s ease-in-out infinite;
+  font-size: 28px;
+  animation: ring 0.8s ease-in-out infinite;
 }
 
 .reminder-title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .reminder-popup-body {
-  padding: 24px;
-  background-color: #f9fafb;
+  padding: 20px 24px;
+  background-color: white;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
 .reminder-task-title {
-  font-size: 20px;
+  font-size: 18px;
   color: #1f2937;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 12px;
+  font-weight: 700;
+  grid-column: 1 / -1;
 }
 
 .reminder-field {
-  margin-bottom: 12px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .reminder-label {
   font-weight: 600;
   color: #6b7280;
-  font-size: 14px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .reminder-value {
-  color: #4b5563;
+  color: #1f2937;
   font-size: 14px;
   margin: 0;
+  font-weight: 500;
 }
 
 .reminder-priority-badge {
@@ -91,56 +100,56 @@
   letter-spacing: 0.5px;
 }
 
-.reminder-popup-footer {
-  padding: 20px;
-  background-color: white;
-  border-radius: 0 0 12px 12px;
+.reminder-stop-button {
+  background: #fff7f7;
+  color: #b91c1c;
+  border: 2px solid #fecdd3;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
-.reminder-stop-button {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-  border: none;
-  padding: 12px 32px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+.reminder-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .reminder-stop-button:hover {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+  background: #fee2e2;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
 }
 
 .reminder-stop-button:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  transform: scale(0.98);
 }
 
 /* Animations */
-@keyframes fadeIn {
+@keyframes slideDown {
   from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(-50px);
+    transform: translateY(-100%);
     opacity: 0;
   }
   to {
     transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(239, 68, 68, 0.6);
   }
 }
 
@@ -157,34 +166,41 @@
 }
 
 /* Responsive design */
-@media (max-width: 640px) {
-  .reminder-popup-container {
-    width: 95%;
-    margin: 10px;
-  }
-
-  .reminder-popup-header {
-    padding: 16px;
-  }
-
-  .reminder-title {
-    font-size: 20px;
-  }
-
-  .reminder-icon {
-    font-size: 28px;
+@media (max-width: 768px) {
+  .reminder-popup-overlay {
+    top: 70px;
+    padding: 0 10px;
   }
 
   .reminder-popup-body {
-    padding: 20px;
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .reminder-popup-header {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+
+  .reminder-header-left {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .reminder-title {
+    font-size: 16px;
+  }
+
+  .reminder-icon {
+    font-size: 24px;
   }
 
   .reminder-task-title {
-    font-size: 18px;
+    font-size: 16px;
   }
 
   .reminder-stop-button {
-    width: 100%;
-    padding: 14px;
+    padding: 8px 16px;
+    font-size: 14px;
   }
 }

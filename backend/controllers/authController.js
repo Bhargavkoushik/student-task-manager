@@ -65,7 +65,8 @@ const register = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        muteHours: user.muteHours
       }
     });
   } catch (error) {
@@ -125,7 +126,8 @@ const login = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        muteHours: user.muteHours
       }
     });
   } catch (error) {
@@ -154,7 +156,8 @@ const getMe = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        muteHours: user.muteHours
       }
     });
   } catch (error) {
@@ -166,8 +169,47 @@ const getMe = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Update mute hours preference
+ * @route   PUT /api/auth/mute-hours
+ * @access  Private
+ */
+const updateMuteHours = async (req, res) => {
+  try {
+    const { enabled, start, end } = req.body;
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Basic validation HH:mm
+    const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (start && !timeRegex.test(start)) {
+      return res.status(400).json({ success: false, message: 'Invalid start time format. Use HH:mm' });
+    }
+    if (end && !timeRegex.test(end)) {
+      return res.status(400).json({ success: false, message: 'Invalid end time format. Use HH:mm' });
+    }
+
+    user.muteHours.enabled = !!enabled;
+    if (start) user.muteHours.start = start;
+    if (end) user.muteHours.end = end;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Mute hours updated',
+      muteHours: user.muteHours
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to update mute hours', error: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  updateMuteHours
 };

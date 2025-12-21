@@ -4,6 +4,8 @@ import './Auth.css';
 /**
  * Register Component - with password visibility toggle
  */
+import PropTypes from 'prop-types';
+
 const Register = ({ onRegister, onSwitchToLogin }) => {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
@@ -67,18 +69,18 @@ const Register = ({ onRegister, onSwitchToLogin }) => {
             <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter your email" disabled={loading} />
           </div>
           <div className="form-group">
-            <label>Password</label>
+            <label htmlFor="password">Password</label>
             <div className="password-input-wrapper">
-              <input type={showPassword ? 'text' : 'password'} name="password" value={formData.password} onChange={handleChange} placeholder="At least 6 characters" disabled={loading} />
+              <input type={showPassword ? 'text' : 'password'} id="password" name="password" value={formData.password} onChange={handleChange} placeholder="At least 6 characters" disabled={loading} />
               <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} disabled={loading}>
                 {showPassword ? '🙈' : '👁️'}
               </button>
             </div>
           </div>
           <div className="form-group">
-            <label>Confirm Password</label>
+            <label htmlFor="confirmPassword">Confirm Password</label>
             <div className="password-input-wrapper">
-              <input type={showConfirmPassword ? 'text' : 'password'} name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="Re-enter your password" disabled={loading} />
+              <input type={showConfirmPassword ? 'text' : 'password'} id="confirmPassword" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} placeholder="Re-enter your password" disabled={loading} />
               <button type="button" className="password-toggle" onClick={() => setShowConfirmPassword(!showConfirmPassword)} disabled={loading}>
                 {showConfirmPassword ? '🙈' : '👁️'}
               </button>
@@ -92,6 +94,11 @@ const Register = ({ onRegister, onSwitchToLogin }) => {
       </div>
     </div>
   );
+};
+
+Register.propTypes = {
+  onRegister: PropTypes.func.isRequired,
+  onSwitchToLogin: PropTypes.func.isRequired
 };
 
 export default Register;
