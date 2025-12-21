@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import { combineDateAndTime } from '../utils/timezoneUtils';
 import './AddTaskForm.css';
 
 /**
@@ -150,6 +151,8 @@ const AddTaskForm = ({ onAddTask }) => {
     // Prepare task data with added reminders array
     const taskData = {
       ...formData,
+      // Convert due date to UTC ISO string if provided
+      dueDate: formData.dueDate ? combineDateAndTime(formData.dueDate, '00:00') : '',
       reminders: addedReminders.map(r => ({
         daysBefore: r.daysBefore,
         reminderTime: r.reminderTime,

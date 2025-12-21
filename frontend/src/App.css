@@ -197,6 +197,182 @@ body {
   padding: 0 0.5rem;
 }
 
+/* Audio Permission Banner */
+.audio-permission-banner {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bfdbfe 100%);
+  color: #0f172a;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.audio-permission-text strong {
+  display: block;
+  font-size: 1.05rem;
+  margin-bottom: 0.1rem;
+}
+
+.audio-permission-text p {
+  margin: 0;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+/* Floating Stop Button (always visible when a ringtone is active) */
+.floating-stop-button {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 2000;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1.25rem;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.floating-stop-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(239, 68, 68, 0.45);
+}
+
+.floating-stop-button:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+/* Snooze Options Container */
+.snooze-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reminder-snooze-button {
+  background: #f59e0b;
+  color: #0f172a;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 4px 8px rgba(245, 158, 11, 0.25);
+}
+
+.reminder-snooze-button:hover {
+  background: #fb923c;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(245, 158, 11, 0.35);
+}
+
+.reminder-snooze-button:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+/* Individual snooze button variants for distinction */
+.snooze-10 {
+  background: #10b981;
+  color: #022c22;
+}
+
+.snooze-10:hover {
+  background: #059669;
+}
+
+.snooze-30 {
+  background: #f59e0b;
+  color: #0f172a;
+}
+
+.snooze-30:hover {
+  background: #d97706;
+}
+
+.snooze-60 {
+  background: #ef4444;
+  color: #0b0f19;
+}
+
+.snooze-60:hover {
+  background: #dc2626;
+}
+
+/* Quiet Hours Banner */
+.quiet-hours-banner {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  color: #0f172a;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.quiet-hours-banner p {
+  margin: 0.15rem 0 0;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+
+/* Reminder Queue Strip */
+.queue-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #1e293b;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid rgba(79, 70, 229, 0.15);
+  box-shadow: 0 6px 14px rgba(79, 70, 229, 0.12);
+}
+
+.queue-strip-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.queue-dot {
+  font-size: 1.2rem;
+}
+
+.queue-strip-button {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  padding: 0.55rem 1rem;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.queue-strip-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(79, 70, 229, 0.38);
+}
+
+.queue-strip-button:active {
+  transform: translateY(0) scale(0.99);
+}
+
 /* Ringtone Alert Banner */
 .ringtone-alert-banner {
   background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
@@ -399,5 +575,28 @@ body {
   
   .main-content {
     padding: var(--spacing-sm);
+  }
+
+  /* Snooze options responsive */
+  .snooze-options {
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .reminder-snooze-button {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .reminder-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .reminder-stop-button {
+    width: 100%;
   }
 }

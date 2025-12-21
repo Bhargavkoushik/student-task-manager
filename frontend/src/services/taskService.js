@@ -36,7 +36,9 @@ api.interceptors.response.use(
       // Token expired or invalid - logout user
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/';
+      if (globalThis.location) {
+        globalThis.location.href = '/';
+      }
     }
     return Promise.reject(error);
   }

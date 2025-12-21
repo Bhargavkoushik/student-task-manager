@@ -7,9 +7,11 @@ import FilterBar from './components/FilterBar';
 import TaskList from './components/TaskList';
 import Modal from './components/Modal';
 import ReminderPopup from './components/ReminderPopup';
+import ReminderQueueModal from './components/ReminderQueueModal';
 import Notification from './components/Notification';
 import useRingtone from './hooks/useRingtone';
 import taskService, { authService } from './services/taskService';
+import { getUserTimezone, storeTimezonePreference } from './utils/timezoneUtils';
 import './App.css';
 
 /**
@@ -34,11 +36,17 @@ function App() {
   // New reminder system state
   const [showReminderPopup, setShowReminderPopup] = useState(false);
   const [activeReminderTask, setActiveReminderTask] = useState(null);
+  const [reminderQueue, setReminderQueue] = useState([]);
+  const [showQueueModal, setShowQueueModal] = useState(false);
   const [notification, setNotification] = useState({ message: '', type: '' });
   const processedRemindersRef = useRef(new Set());
+  const [audioPermissionGranted, setAudioPermissionGranted] = useState(() => {
+    if (globalThis.window === undefined) return false;
+    return globalThis.localStorage?.getItem('audioPermissionGranted') === 'true';
+  });
   
   // Ringtone hook
-  const { scheduleRingtones, stopRingtone: stopRingtoneHook, stopAndEnd, initAudioContext } = useRingtone();
+  const { isPlaying, scheduleRingtones, stopAndEnd, initAudioContext } = useRingtone();
   
   // Legacy reminder state (keeping for backward compatibility)
   const [reminderAlertIds, setReminderAlertIds] = useState([]);
@@ -57,6 +65,12 @@ function App() {
     }
   }, []);
 
+  // Detect and store user timezone on mount
+  useEffect(() => {
+    const timezone = getUserTimezone();
+    storeTimezonePreference(timezone);
+  }, []);
+
   // Fetch tasks whenever auth state changes to authenticated
   useEffect(() => {
     if (isAuthenticated) {
@@ -67,13 +81,21 @@ function App() {
   // Ask for notification permission once authenticated
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (typeof Notification === 'undefined') return;
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
+    if (globalThis.Notification === undefined) return;
+    if (globalThis.Notification.permission === 'default') {
+      globalThis.Notification.requestPermission().catch(() => {});
     }
-    // Initialize audio context on first user interaction
-    initAudioContext();
-  }, [isAuthenticated]);
+    // Initialize audio context only after user explicitly enables reminder sound
+    if (audioPermissionGranted) {
+      initAudioContext();
+    }
+  }, [isAuthenticated, audioPermissionGranted]);
+
+  // Persist audio permission so the prompt is only shown once
+  useEffect(() => {
+    if (!globalThis.localStorage) return;
+    globalThis.localStorage.setItem('audioPermissionGranted', audioPermissionGranted ? 'true' : 'false');
+  }, [audioPermissionGranted]);
 
   // Apply filters and search whenever tasks, filter, or search query changes
   useEffect(() => {
@@ -103,53 +125,27 @@ function App() {
         
         // Mark as processed
         processedRemindersRef.current.add(reminderId);
-        
+
         console.log(`📢 Processing reminder for task: ${task.title}`);
-        
+
         // 1. Show browser alert (must be called before other async operations)
-        if (window.alert) {
+        if (globalThis.window?.alert) {
           setTimeout(() => {
-            alert(`⏰ Reminder: ${task.title} is due!`);
+            globalThis.alert(`⏰ Reminder: ${task.title} is due!`);
           }, 100);
         }
         
         // 2. Show browser notification
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification('⏰ Task Reminder', {
+        if (globalThis.Notification?.permission === 'granted') {
+          new globalThis.Notification('⏰ Task Reminder', {
             body: `${task.title}\n${task.description || ''}\nPriority: ${task.priority.toUpperCase()}`,
             icon: '/favicon.ico',
             tag: reminderId
           });
         }
         
-        // 3. Display ReminderPopup component
-        setActiveReminderTask(task);
-        setShowReminderPopup(true);
-        
-        // 4. Play single 10s ringtone; when it ends, progress reminder in backend
-        const onRingEnd = async (endedTask) => {
-          try {
-            const result = await taskService.reminderProgress(endedTask._id, { stopped: false });
-            // Update tasks list
-            await fetchTasks();
-
-            // Close popup
-            setShowReminderPopup(false);
-            setActiveReminderTask(null);
-
-            // Show notification based on result
-            if (result?.data?.completed) {
-              setNotification({ message: 'Task completed after max reminders ✅', type: 'success' });
-            } else {
-              setNotification({ message: 'Next reminder scheduled in 1 hour ⏳', type: 'info' });
-            }
-            setTimeout(() => setNotification({ message: '', type: '' }), 5000);
-          } catch (err) {
-            console.error('Failed to progress reminder:', err);
-          }
-        };
-
-        scheduleRingtones(task, onRingEnd);
+        // 3. Queue reminder to ensure only one is active at a time
+        setReminderQueue(prev => [...prev, task]);
       }
       
       // Refresh tasks to get updated status
@@ -167,20 +163,179 @@ function App() {
    */
   const handleStopRingtone = async () => {
     try {
-      // Stop and signal end to progress reminder
+      const taskToStop = activeReminderTask;
+
+      // Stop both hook-driven and legacy audio immediately
       stopAndEnd();
+      stopRingtone();
 
-      // Close the popup immediately
-      setShowReminderPopup(false);
-      setActiveReminderTask(null);
+      // If we have an active reminder task, also update backend state and close popup
+      if (taskToStop) {
+        setShowReminderPopup(false);
+        setActiveReminderTask(null);
 
-      // Show success toast
-      setNotification({ message: 'Ringtone stopped successfully 🔕', type: 'success' });
+        // After clearing active reminder, immediately try next queued item
+        setTimeout(() => {
+          // queue processor effect will pick this up
+        }, 0);
+
+        try {
+          await taskService.reminderProgress(taskToStop._id, { stopped: true });
+          await fetchTasks();
+        } catch (error_) {
+          console.error('Failed to update backend:', error_);
+        }
+      }
+
+      // Show success notification with close button
+      setNotification({ 
+        message: '🔕 Ringtone stopped successfully', 
+        type: 'success' 
+      });
+      
+      // Auto-close notification after 5 seconds
       setTimeout(() => setNotification({ message: '', type: '' }), 5000);
 
-      // Backend progress will be handled by the onEnd callback from the hook
     } catch (err) {
       console.error('Failed to stop ringtone:', err);
+      setNotification({ 
+        message: '❌ Failed to stop ringtone', 
+        type: 'error' 
+      });
+      setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+    }
+  };
+
+  /**
+   * Snooze current reminder by 10 minutes
+   */
+  const handleSnooze = async (minutes = 10) => {
+    try {
+      const taskToSnooze = activeReminderTask;
+
+      // Stop audio immediately
+      stopAndEnd();
+      stopRingtone();
+
+      if (taskToSnooze) {
+        setShowReminderPopup(false);
+        setActiveReminderTask(null);
+
+        try {
+          await taskService.reminderProgress(taskToSnooze._id, { snoozeMinutes: minutes });
+          await fetchTasks();
+        } catch (error_) {
+          console.error('Failed to snooze backend:', error_);
+        }
+      }
+
+      setNotification({
+        message: `😴 Snoozed for ${minutes} minutes`,
+        type: 'info'
+      });
+      setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+
+    } catch (err) {
+      console.error('Failed to snooze reminder:', err);
+      setNotification({
+        message: '❌ Failed to snooze reminder',
+        type: 'error'
+      });
+      setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+    }
+  };
+
+  /**
+   * Queue management: open/close, reorder, and cancel queued reminders
+   */
+  const openQueueModal = () => setShowQueueModal(true);
+  const closeQueueModal = () => setShowQueueModal(false);
+
+  const moveQueueItem = (from, to) => {
+    setReminderQueue(prev => {
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  const handleQueueMoveUp = (index) => moveQueueItem(index, index - 1);
+  const handleQueueMoveDown = (index) => moveQueueItem(index, index + 1);
+
+  const handleQueueRemove = (index) => {
+    setReminderQueue(prev => prev.filter((_, i) => i !== index));
+  };
+
+  /**
+   * Build onRingEnd handler per task to update backend when audio finishes naturally
+   */
+  const makeOnRingEnd = (task) => async (endedTask) => {
+    try {
+      const targetTask = endedTask || task;
+      const result = await taskService.reminderProgress(targetTask._id, { stopped: false });
+      console.log('🔔 Ringtone ended naturally, backend updated:', result?.data?.message);
+
+      await fetchTasks();
+
+      if (result?.data?.message?.includes('All reminders completed')) {
+        setShowReminderPopup(false);
+        setActiveReminderTask(null);
+        setNotification({ 
+          message: `✅ All reminders for "${targetTask.title}" completed. Reminder removed from task.`, 
+          type: 'success' 
+        });
+        setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+      } else {
+        console.log('⏰ Reminder rescheduled, waiting for user to close popup...');
+      }
+    } catch (err) {
+      console.error('Failed to progress reminder:', err);
+    }
+  };
+
+  /**
+   * Request a one-time user gesture to unlock audio playback for reminders
+   * Browsers block autoplay, so we play and pause a short clip to gain permission
+   */
+  const handleEnableReminderSound = async () => {
+    if (audioPermissionGranted) {
+      setNotification({ message: '🔔 Reminder sound already enabled', type: 'info' });
+      setTimeout(() => setNotification({ message: '', type: '' }), 4000);
+      return;
+    }
+
+    const testSources = [
+      '/sounds/medium-priority.mp3',
+      'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg'
+    ];
+
+    try {
+      for (const src of testSources) {
+        try {
+          const testAudio = new Audio(src);
+          testAudio.volume = 0.05;
+          await testAudio.play();
+          testAudio.pause();
+          setAudioPermissionGranted(true);
+          initAudioContext();
+          setNotification({ message: '✅ Reminder sound enabled', type: 'success' });
+          setTimeout(() => setNotification({ message: '', type: '' }), 4000);
+          return;
+        } catch (err) {
+          console.warn('Audio unlock source failed, trying fallback:', err?.message || err);
+        }
+      }
+
+      throw new Error('Audio playback blocked by browser');
+    } catch (err) {
+      console.error('Failed to unlock audio playback:', err);
+      setNotification({ 
+        message: '⚠️ Click Allow in your browser to enable reminder sound, then try again.', 
+        type: 'error' 
+      });
+      setTimeout(() => setNotification({ message: '', type: '' }), 5000);
     }
   };
 
@@ -307,7 +462,7 @@ function App() {
    * Delete task
    */
   const handleDeleteTask = async (taskId) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
+    if (globalThis.window?.confirm && globalThis.window.confirm('Are you sure you want to delete this task?')) {
       try {
         await taskService.deleteTask(taskId);
         setTasks(prev => prev.filter(task => task._id !== taskId));
@@ -349,6 +504,51 @@ function App() {
     bell: 'https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg'
   };
 
+  // Quiet hours window (24h): 00:00–05:00
+  const quietHoursWindow = { startHour: 0, endHour: 5 };
+
+  const isWithinQuietHours = (date = new Date()) => {
+    const hour = date.getHours();
+    const { startHour, endHour } = quietHoursWindow;
+    if (startHour === endHour) return false;
+    if (startHour < endHour) {
+      return hour >= startHour && hour < endHour;
+    }
+    return hour >= startHour || hour < endHour;
+  };
+
+  const isRingtoneActive = isPlaying || !!currentAudioRef.current;
+  const isReminderActive = !!activeReminderTask;
+  const upcomingQueueCount = reminderQueue.length;
+  const totalQueueCount = upcomingQueueCount + (isReminderActive ? 1 : 0);
+
+  /**
+   * Start the next reminder in the queue if none is active
+   */
+  useEffect(() => {
+    if (isReminderActive || reminderQueue.length === 0) return;
+
+    const [next, ...rest] = reminderQueue;
+    setReminderQueue(rest);
+    setActiveReminderTask(next);
+    setShowReminderPopup(true);
+
+    const inQuietHours = isWithinQuietHours();
+
+    if (audioPermissionGranted && !inQuietHours) {
+      scheduleRingtones(next, makeOnRingEnd(next));
+    } else {
+      console.warn('⚠️  Audio playback skipped (permission missing or quiet hours).');
+      if (inQuietHours) {
+        setNotification({
+          message: '🔇 Quiet hours (12AM–5AM): sound muted, reminder shown only.',
+          type: 'info'
+        });
+        setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+      }
+    }
+  }, [isReminderActive, reminderQueue, audioPermissionGranted, scheduleRingtones]);
+
   const stopRingtone = () => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -358,7 +558,7 @@ function App() {
     setRingstoneStopped(true);
     
     // Close all notifications
-    if (typeof Notification !== 'undefined') {
+    if (globalThis.Notification) {
       // We'll handle notification closing through actions
     }
   };
@@ -367,35 +567,58 @@ function App() {
    * Notify with priority-based ringtone and browser notification with STOP button
    */
   const notifyReminder = async (task, reminder, reminderIndex) => {
+    // If another reminder/audio is active, queue this one to avoid overlap
+    if (isReminderActive || isRingtoneActive || reminderQueue.length > 0) {
+      setReminderQueue(prev => [...prev, task]);
+      return;
+    }
+
+    const inQuietHours = isWithinQuietHours();
+
     // Stop any currently playing ringtone
     stopRingtone();
 
-    // Play ringtone for 6 seconds
-    const src = ringtoneLibrary[reminder.ringtone] || ringtoneLibrary.chime;
-    const audio = new Audio(src);
-    audio.loop = false;
-    currentAudioRef.current = audio;
-    audio.play().catch(() => {});
-    
-    // Automatically stop after 6 seconds
-    const timeout = setTimeout(() => {
-      stopRingtone();
-    }, 6000);
+    // Play ringtone only if user enabled audio (no auto-stop; user presses STOP)
+    if (audioPermissionGranted && !inQuietHours) {
+      const src = ringtoneLibrary[reminder.ringtone] || ringtoneLibrary.chime;
+      const audio = new Audio(src);
+      audio.loop = false;
+      audio.onended = () => {
+        stopRingtone();
+      };
+      currentAudioRef.current = audio;
+      audio.play().catch(() => {});
+    } else {
+      console.warn('⚠️  Skipping ringtone playback (permission missing or quiet hours).');
+      if (inQuietHours) {
+        setNotification({
+          message: '🔇 Quiet hours (12AM–5AM): sound muted, reminder shown only.',
+          type: 'info'
+        });
+        setTimeout(() => setNotification({ message: '', type: '' }), 5000);
+      }
+    }
 
     // Browser notification with actions
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    if (globalThis.Notification?.permission === 'granted') {
+      const ringCountText = (() => {
+        if (task.priority === 'low') return '1 time';
+        if (task.priority === 'medium') return '2 times (every hour)';
+        return '3 times (every hour)';
+      })();
+
       const notificationBody = [
         `📌 ${task.title}`,
         task.description ? `📝 ${task.description}` : '',
         `⚡ Priority: ${task.priority.toUpperCase()}`,
         `📅 Due: ${new Date(task.dueDate).toLocaleDateString()}`,
         `🔔 Ringtone: ${reminder.ringtone}`,
-        `🔁 Will ring ${task.priority === 'low' ? '1 time' : task.priority === 'medium' ? '2 times (every hour)' : '3 times (every hour)'}`,
+        `🔁 Will ring ${ringCountText}`,
         '',
         '👇 Click STOP to silence reminder'
       ].filter(Boolean).join('\n');
 
-      const notification = new Notification('⏰ Task Reminder!', {
+      const notification = new globalThis.Notification('⏰ Task Reminder!', {
         body: notificationBody,
         tag: `${task._id}-${reminderIndex}`,
         icon: '📚',
@@ -406,7 +629,6 @@ function App() {
 
       // Handle notification click to stop ringtone
       notification.onclick = () => {
-        clearTimeout(timeout);
         stopRingtone();
         notification.close();
       };
@@ -428,6 +650,48 @@ function App() {
     }
   };
 
+  const getMaxRingsForPriority = (priority) => ({
+    low: 1,
+    medium: 2,
+    high: 3
+  }[priority] || 1);
+
+  const buildReminderDate = (task, reminder) => {
+    const dueDate = new Date(task.dueDate);
+    const reminderDate = new Date(dueDate);
+    reminderDate.setDate(reminderDate.getDate() - reminder.daysBefore);
+    if (reminder.reminderTime) {
+      const [hours, minutes] = reminder.reminderTime.split(':').map(Number);
+      reminderDate.setHours(hours, minutes, 0, 0);
+    }
+    return reminderDate;
+  };
+
+  const shouldTriggerReminder = (now, reminderDate, currentCount) => {
+    const minutesSinceReminder = Math.floor((now.getTime() - reminderDate.getTime()) / (1000 * 60));
+    const targetMinutes = currentCount * 60;
+    const isWithinWindow = minutesSinceReminder >= targetMinutes && minutesSinceReminder < (targetMinutes + 1);
+    return { isWithinWindow };
+  };
+
+  const processReminderForTask = async (task, reminder, reminderIndex, now, triggered, activeAlerts) => {
+    const reminderDate = buildReminderDate(task, reminder);
+    const maxRings = getMaxRingsForPriority(task.priority);
+    const currentCount = reminder.triggeredCount || 0;
+    if (currentCount >= maxRings || now < reminderDate) return;
+
+    const { isWithinWindow } = shouldTriggerReminder(now, reminderDate, currentCount);
+    if (!isWithinWindow) return;
+
+    const triggerKey = `${task._id}-${reminderIndex}-${currentCount}`;
+    if (triggered.has(triggerKey)) return;
+
+    triggered.add(triggerKey);
+    activeAlerts.push(task._id);
+    setShowReminderAlert(true);
+    await notifyReminder(task, reminder, reminderIndex);
+  };
+
   /**
    * Check reminders with priority-based ring logic
    * Low: 1 time | Medium: 2 times (initial + 1hr) | High: 3 times (initial + 1hr + 1hr)
@@ -437,76 +701,12 @@ function App() {
     const triggered = reminderTriggeredRef.current;
     const activeAlerts = [];
 
-    console.log('🔔 Checking reminders at:', now.toLocaleTimeString());
-
     for (const task of tasks) {
-      if (task.completed || !task.dueDate || !task.reminders || task.reminders.length === 0) continue;
+      if (task.completed || !task.dueDate || !task.reminders?.length) continue;
 
-      console.log(`📋 Task: ${task.title} has ${task.reminders.length} reminders`);
-
-      // Check each reminder for this task
       for (let reminderIndex = 0; reminderIndex < task.reminders.length; reminderIndex++) {
         const reminder = task.reminders[reminderIndex];
-        
-        // Calculate reminder date: due date minus days before
-        const dueDate = new Date(task.dueDate);
-        const reminderDate = new Date(dueDate);
-        reminderDate.setDate(reminderDate.getDate() - reminder.daysBefore);
-        
-        // Set the time from reminderTime string (format: "HH:mm")
-        if (reminder.reminderTime) {
-          const [hours, minutes] = reminder.reminderTime.split(':').map(Number);
-          reminderDate.setHours(hours, minutes, 0, 0);
-        }
-
-        console.log(`  Reminder ${reminderIndex + 1}:`);
-        console.log(`  - Reminder date: ${reminderDate.toLocaleString()}`);
-        console.log(`  - Due date: ${dueDate.toLocaleString()}`);
-        console.log(`  - Days before: ${reminder.daysBefore}`);
-        console.log(`  - Reminder time: ${reminder.reminderTime}`);
-        console.log(`  - Priority: ${task.priority}`);
-        console.log(`  - Triggered count: ${reminder.triggeredCount || 0}`);
-
-        // Get max rings based on priority
-        const maxRings = {
-          low: 1,
-          medium: 2,
-          high: 3
-        }[task.priority] || 1;
-
-        const currentCount = reminder.triggeredCount || 0;
-
-        // Check if we should trigger reminder
-        if (currentCount < maxRings) {
-          // Calculate minutes since reminder time for more precise checking
-          const minutesSinceReminder = Math.floor((now.getTime() - reminderDate.getTime()) / (1000 * 60));
-          
-          // Check if we're within 1 minute of the target time
-          // For initial reminder (count 0): trigger at reminder time
-          // For subsequent reminders: trigger at 1-hour intervals (60 min, 120 min, etc.)
-          const targetMinutes = currentCount * 60; // 0, 60, 120 minutes
-          const isWithinWindow = minutesSinceReminder >= targetMinutes && minutesSinceReminder < (targetMinutes + 1);
-          
-          console.log(`  - Minutes since reminder: ${minutesSinceReminder}`);
-          console.log(`  - Target minutes: ${targetMinutes}`);
-          console.log(`  - Is within window: ${isWithinWindow}`);
-          
-          if (isWithinWindow && now >= reminderDate) {
-            // Check if we haven't already triggered for this specific occurrence
-            const triggerKey = `${task._id}-${reminderIndex}-${currentCount}`;
-            if (!triggered.has(triggerKey)) {
-              console.log(`🔔 TRIGGERING REMINDER for ${task.title}, reminder ${reminderIndex + 1}!`);
-              triggered.add(triggerKey);
-              activeAlerts.push(task._id);
-              setShowReminderAlert(true);
-              await notifyReminder(task, reminder, reminderIndex);
-            } else {
-              console.log(`  - Already triggered this occurrence`);
-            }
-          }
-        } else {
-          console.log(`  - Max rings reached (${maxRings})`);
-        }
+        await processReminderForTask(task, reminder, reminderIndex, now, triggered, activeAlerts);
       }
     }
 
@@ -532,7 +732,7 @@ function App() {
       result = result.filter(
         task =>
           task.title.toLowerCase().includes(query) ||
-          (task.description && task.description.toLowerCase().includes(query))
+          task.description?.toLowerCase().includes(query)
       );
     }
 
@@ -558,11 +758,13 @@ function App() {
 
   // Periodically check reminders
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      return undefined;
+    }
     const intervalId = setInterval(checkReminders, 30000);
     checkReminders();
     return () => clearInterval(intervalId);
-  }, [tasks, isAuthenticated]);
+  }, [tasks, isAuthenticated, audioPermissionGranted]);
 
   /**
    * NEW: Periodically check for pending reminders from backend
@@ -578,7 +780,7 @@ function App() {
     const intervalId = setInterval(checkPendingReminders, 30000);
     
     return () => clearInterval(intervalId);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, audioPermissionGranted]);
 
   /**
    * Close modal
@@ -621,12 +823,33 @@ function App() {
             </div>
           )}
 
+          {/* Audio permission banner to satisfy browser autoplay rules */}
+          {!audioPermissionGranted && (
+            <div className="audio-permission-banner">
+              <div className="audio-permission-text">
+                <strong>Enable reminder sound</strong>
+                <p>Browsers block autoplay until you interact. Click once to allow reminders to ring.</p>
+              </div>
+              <button className="btn btn-primary" onClick={handleEnableReminderSound}>
+                Enable Reminder Sound
+              </button>
+            </div>
+          )}
+
           {/* NEW: ReminderPopup Component */}
           {showReminderPopup && activeReminderTask && (
             <ReminderPopup 
               task={activeReminderTask}
               onStopRingtone={handleStopRingtone}
+              onSnooze={handleSnooze}
             />
+          )}
+
+          {/* Floating STOP button to ensure users can stop sound even if popup is obscured */}
+          {isRingtoneActive && (
+            <button className="floating-stop-button" onClick={handleStopRingtone}>
+              🔕 Stop Ringtone
+            </button>
           )}
 
           {/* NEW: Notification Component */}
@@ -637,6 +860,39 @@ function App() {
               onClose={() => setNotification({ message: '', type: '' })}
             />
           )}
+
+          {/* Quiet hours banner (sound muted) */}
+          {isWithinQuietHours() && (
+            <div className="quiet-hours-banner">
+              <div>
+                <strong>Quiet hours active (12AM–5AM)</strong>
+                <p>Sound is muted during this window. Reminders will still appear and email/web notifications continue.</p>
+              </div>
+            </div>
+          )}
+
+          {(upcomingQueueCount > 0 || isReminderActive) && (
+            <div className="queue-strip">
+              <div className="queue-strip-text">
+                <span className="queue-dot">🔔</span>
+                <span>
+                  {isReminderActive ? 'Reminder active' : 'No active reminder'} · {upcomingQueueCount} queued
+                </span>
+              </div>
+              <button className="queue-strip-button" onClick={openQueueModal}>
+                View Queue ({totalQueueCount})
+              </button>
+            </div>
+          )}
+
+          <ReminderQueueModal
+            isOpen={showQueueModal}
+            queue={reminderQueue}
+            onClose={closeQueueModal}
+            onMoveUp={handleQueueMoveUp}
+            onMoveDown={handleQueueMoveDown}
+            onRemove={handleQueueRemove}
+          />
 
           {/* Ringtone Alert Banner */}
           {reminderAlertIds.length > 0 && !ringstoneStopped && showReminderAlert && (

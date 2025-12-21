@@ -34,77 +34,50 @@ const useRingtone = () => {
     high: 'https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg'
   };
 
+  const notifyRingEnd = () => {
+    setIsPlaying(false);
+    if (onEndRef.current && typeof onEndRef.current === 'function') {
+      onEndRef.current(currentTask);
+    }
+  };
+
+  const playWithSource = async (src, priority, label) => {
+    const audio = new Audio(src);
+    audio.volume = 0.7;
+    await audio.play();
+    console.log(`🔔 Playing ${label} ringtone for ${priority} priority (ring #${ringCountRef.current + 1})`);
+    audio.onended = () => {
+      console.log('🔕 Ringtone finished playing');
+      notifyRingEnd();
+    };
+
+    audioRef.current = audio;
+    setIsPlaying(true);
+    ringCountRef.current += 1;
+  };
+
   /**
-   * Play a single ring (6 seconds of audio)
+   * Play a single ring (10 seconds of audio)
    * Handles browser autoplay restrictions by using a user-gesture-safe approach
    * Tries local files first, then falls back to online sources
    */
   const playSingleRing = async (priority) => {
-    try {
-      // Try local file first
-      let audioSrc = audioFiles[priority] || audioFiles.medium;
-      let audio = new Audio(audioSrc);
-      
-      // Set volume
-      audio.volume = 0.7;
-      
-      // Try to play local file
-      const playPromise = audio.play();
-      
-      playPromise.then(() => {
-        console.log(`🔔 Playing ringtone for ${priority} priority (ring #${ringCountRef.current + 1})`);
-        audioRef.current = audio;
-        setIsPlaying(true);
-        
-        // Stop after 10 seconds
-        setTimeout(() => {
-          audio.pause();
-          audio.currentTime = 0;
-          setIsPlaying(false);
-          console.log(`🔕 Ringtone stopped after 10 seconds`);
-          // Notify ring end
-          if (onEndRef.current && typeof onEndRef.current === 'function') {
-            onEndRef.current(currentTask);
-          }
-        }, 10000);
-        
-        ringCountRef.current += 1;
-      }).catch(error => {
-        console.warn('⚠️  Local audio failed, trying fallback:', error.message);
-        
-        // Try fallback audio
-        audio = new Audio(fallbackAudioFiles[priority] || fallbackAudioFiles.medium);
-        audio.volume = 0.7;
-        audioRef.current = audio;
-        
-        audio.play().then(() => {
-          console.log(`🔔 Playing fallback ringtone for ${priority} priority (ring #${ringCountRef.current + 1})`);
-          setIsPlaying(true);
-          
-          // Stop after 10 seconds
-          setTimeout(() => {
-            audio.pause();
-            audio.currentTime = 0;
-            setIsPlaying(false);
-            console.log(`🔕 Fallback ringtone stopped after 10 seconds`);
-            // Notify ring end
-            if (onEndRef.current && typeof onEndRef.current === 'function') {
-              onEndRef.current(currentTask);
-            }
-          }, 10000);
-          
-          ringCountRef.current += 1;
-        }).catch(fallbackError => {
-          console.error('❌ Both local and fallback audio failed:', fallbackError.message);
-          console.log('💡 User interaction may be required to enable audio');
-          setIsPlaying(false);
-        });
-      });
-      
-    } catch (error) {
-      console.error('❌ Error creating audio:', error);
-      setIsPlaying(false);
+    const sources = [
+      { src: audioFiles[priority] || audioFiles.medium, label: 'local' },
+      { src: fallbackAudioFiles[priority] || fallbackAudioFiles.medium, label: 'fallback' }
+    ];
+
+    for (const { src, label } of sources) {
+      try {
+        await playWithSource(src, priority, label);
+        return;
+      } catch (error) {
+        console.warn(`⚠️  ${label} audio failed:`, error.message);
+      }
     }
+
+    console.error('❌ All audio sources failed; user interaction may be required to enable audio');
+    setIsPlaying(false);
   };
 
   /**

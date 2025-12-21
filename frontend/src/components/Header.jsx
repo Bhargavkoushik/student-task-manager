@@ -1,4 +1,6 @@
 import React from 'react';
+import PropTypes from 'prop-types';
+import { getTimezoneDisplay } from '../utils/timezoneUtils';
 import './Header.css';
 
 const Header = ({ currentUser, onLogout, title = 'Student Task Manager' }) => {
@@ -6,6 +8,9 @@ const Header = ({ currentUser, onLogout, title = 'Student Task Manager' }) => {
     <header className="header">
       <div className="header-left">
         <h1 className="header-title">📚 {title}</h1>
+        <div className="timezone-indicator" title="Your timezone is automatically detected">
+          🌍 {getTimezoneDisplay()}
+        </div>
       </div>
       <div className="header-center">
         {/* Optional: Add filters or main heading here */}
@@ -27,6 +32,15 @@ const Header = ({ currentUser, onLogout, title = 'Student Task Manager' }) => {
       </div>
     </header>
   );
+};
+
+Header.propTypes = {
+  currentUser: PropTypes.shape({
+    name: PropTypes.string,
+    email: PropTypes.string
+  }),
+  onLogout: PropTypes.func,
+  title: PropTypes.string
 };
 
 export default Header;

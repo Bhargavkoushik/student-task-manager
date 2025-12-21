@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+import { formatDateForInput, combineDateAndTime } from '../utils/timezoneUtils';
 import './Modal.css';
 
 /**
@@ -24,39 +26,46 @@ const Modal = ({ isOpen, onClose, onSave, task }) => {
   const [customReminderDays, setCustomReminderDays] = useState('');
   const [errors, setErrors] = useState({});
 
+  const populateFromTask = (taskData) => {
+    const reminderDays = taskData.reminderDaysBefore;
+    let presetReminder = '';
+
+    if ([1, 2, 3].includes(reminderDays)) {
+      presetReminder = String(reminderDays);
+    } else if (reminderDays != null) {
+      presetReminder = 'custom';
+    }
+
+    setFormData({
+      title: taskData.title || '',
+      description: taskData.description || '',
+      priority: taskData.priority || 'medium',
+      // Convert UTC date to local date for input field
+      dueDate: taskData.dueDate ? formatDateForInput(taskData.dueDate) : '',
+      completed: taskData.completed || false
+    });
+
+    if (taskData.reminders && Array.isArray(taskData.reminders) && taskData.reminders.length > 0) {
+      setAddedReminders(taskData.reminders.map(r => ({
+        daysBefore: r.daysBefore,
+        reminderTime: r.reminderTime || '09:00',
+        ringtone: r.ringtone || 'chime'
+      })));
+    } else {
+      setAddedReminders([]);
+    }
+
+    if (presetReminder === 'custom' && reminderDays != null) {
+      setCustomReminderDays(String(reminderDays));
+    } else {
+      setCustomReminderDays('');
+    }
+  };
+
   // Populate form with task data when modal opens
   useEffect(() => {
     if (task) {
-      const presetReminder = [1, 2, 3].includes(task.reminderDaysBefore)
-        ? String(task.reminderDaysBefore)
-        : task.reminderDaysBefore != null
-          ? 'custom'
-          : '';
-
-      setFormData({
-        title: task.title || '',
-        description: task.description || '',
-        priority: task.priority || 'medium',
-        dueDate: task.dueDate ? task.dueDate.split('T')[0] : '',
-        completed: task.completed || false
-      });
-
-      // Set added reminders if exists
-      if (task.reminders && Array.isArray(task.reminders) && task.reminders.length > 0) {
-        setAddedReminders(task.reminders.map(r => ({
-          daysBefore: r.daysBefore,
-          reminderTime: r.reminderTime || '09:00',
-          ringtone: r.ringtone || 'chime'
-        })));
-      } else {
-        setAddedReminders([]);
-      }
-
-      if (presetReminder === 'custom' && task.reminderDaysBefore != null) {
-        setCustomReminderDays(String(task.reminderDaysBefore));
-      } else {
-        setCustomReminderDays('');
-      }
+      populateFromTask(task);
     }
   }, [task]);
 
@@ -169,6 +178,8 @@ const Modal = ({ isOpen, onClose, onSave, task }) => {
     // Prepare task data with added reminders array
     const taskData = {
       ...formData,
+      // Convert local date to UTC ISO string
+      dueDate: formData.dueDate ? combineDateAndTime(formData.dueDate, '00:00') : '',
       reminders: addedReminders.map(r => ({
         daysBefore: r.daysBefore,
         reminderTime: r.reminderTime,
@@ -177,14 +188,29 @@ const Modal = ({ isOpen, onClose, onSave, task }) => {
     };
 
     onSave(taskData);
+    onClose();
   };
 
   // Don't render if modal is not open
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
+    <div
+      className="modal-overlay"
+      aria-hidden="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+      <dialog
+        className="modal-content"
+        aria-modal="true"
+        open
+      >
         <div className="modal-header">
           <h2>Edit Task</h2>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -343,7 +369,10 @@ const Modal = ({ isOpen, onClose, onSave, task }) => {
               <div className="reminders-list">
                 <h4>Added Reminders ({addedReminders.length})</h4>
                 {addedReminders.map((reminder, index) => (
-                  <div key={index} className="reminder-item">
+                  <div
+                    key={`${reminder.daysBefore}-${reminder.reminderTime}-${reminder.ringtone}-${index}`}
+                    className="reminder-item"
+                  >
                     <div className="reminder-info">
                       <span>{reminder.daysBefore} day(s) before at {reminder.reminderTime}</span>
                       <span className="ringtone-badge">{reminder.ringtone}</span>
@@ -370,9 +399,28 @@ const Modal = ({ isOpen, onClose, onSave, task }) => {
             </button>
           </div>
         </form>
-      </div>
+      </dialog>
     </div>
   );
+};
+
+Modal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  onSave: PropTypes.func.isRequired,
+  task: PropTypes.shape({
+    title: PropTypes.string,
+    description: PropTypes.string,
+    priority: PropTypes.string,
+    dueDate: PropTypes.string,
+    completed: PropTypes.bool,
+    reminderDaysBefore: PropTypes.number,
+    reminders: PropTypes.arrayOf(PropTypes.shape({
+      daysBefore: PropTypes.number,
+      reminderTime: PropTypes.string,
+      ringtone: PropTypes.string
+    }))
+  })
 };
 
 export default Modal;

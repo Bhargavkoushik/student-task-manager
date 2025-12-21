@@ -62,7 +62,7 @@ cron.schedule('* * * * *', async () => {
 
     // Process each task
     for (const task of tasksToRemind) {
-      if (!task.user || !task.user.email) {
+      if (!task.user?.email) {
         console.warn(`⚠️  Task ${task._id} has no associated user or email. Skipping.`);
         continue;
       }

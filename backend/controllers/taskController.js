@@ -398,9 +398,19 @@ const getFiredReminders = async (req, res) => {
  * @route   POST /api/tasks/:id/reminder-progress
  * @access  Public
  */
+const MAX_RING_HISTORY = 20;
+
+const pushRingHistory = (task, entry) => {
+  task.ringHistory = task.ringHistory || [];
+  task.ringHistory.push(entry);
+  if (task.ringHistory.length > MAX_RING_HISTORY) {
+    task.ringHistory = task.ringHistory.slice(-MAX_RING_HISTORY);
+  }
+};
+
 const progressReminder = async (req, res) => {
   try {
-    const { stopped } = req.body; // boolean; informational only
+    const { stopped, snoozeMinutes } = req.body; // snoozeMinutes optional
     const task = await Task.findOne({ _id: req.params.id, user: req.user.id });
 
     if (!task) {
@@ -409,6 +419,25 @@ const progressReminder = async (req, res) => {
 
     if (task.completed) {
       return res.status(200).json({ success: true, message: 'Task already completed', data: task });
+    }
+
+    const now = new Date();
+
+    // Snooze path: set new reminderAt in snoozeMinutes, reset flags, do not increment counts
+    if (snoozeMinutes && Number.isFinite(snoozeMinutes) && snoozeMinutes > 0) {
+      const nextAt = new Date(Date.now() + snoozeMinutes * 60 * 1000);
+      task.reminderAt = nextAt;
+      task.uiPending = false;
+      task.notified = false;
+      task.lastRingAt = now;
+      pushRingHistory(task, { at: now, action: 'snoozed', note: `Snoozed ${snoozeMinutes}m` });
+      await task.save();
+
+      return res.status(200).json({
+        success: true,
+        message: `Reminder snoozed for ${snoozeMinutes} minutes`,
+        data: task
+      });
     }
 
     // Compute max reminders based on priority
@@ -425,6 +454,8 @@ const progressReminder = async (req, res) => {
       task.reminderAt = nextAt;
       task.uiPending = false; // UI handled
       task.notified = false;  // allow next email when it fires
+      task.lastRingAt = now;
+      pushRingHistory(task, { at: now, action: stopped ? 'stopped' : 'auto', note: 'Reminder progressed' });
       await task.save();
 
       return res.status(200).json({
@@ -433,17 +464,20 @@ const progressReminder = async (req, res) => {
         data: task
       });
     } else {
-      // Max reminders reached – mark completed
-      task.reminderCount = newCount;
-      task.completed = true;
+      // Max reminders reached – remove reminder details but keep task in pending list
+      task.reminderCount = 0;
+      task.reminderAt = null;  // Remove reminder time
       task.uiPending = false;
-      task.reminderAt = null;
       task.notified = false;
+      task.lastRingAt = now;
+      pushRingHistory(task, { at: now, action: stopped ? 'stopped' : 'auto', note: 'Max reminders reached' });
+      // Do NOT mark completed - task stays in pending list without reminder
       await task.save();
 
       return res.status(200).json({
         success: true,
-        message: 'Max reminders reached – task completed',
+        message: 'All reminders completed - reminder removed from task',
+        completed: false,  // Task NOT completed, just reminder removed
         data: task
       });
     }

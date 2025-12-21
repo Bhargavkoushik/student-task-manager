@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
       lowercase: true,
       match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
         'Please provide a valid email'
       ]
     },
@@ -29,6 +29,12 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Password is required'],
       minlength: [6, 'Password must be at least 6 characters'],
       select: false // Don't return password by default in queries
+    },
+    // Optional: User preference to mute reminders during specific hours
+    muteHours: {
+      enabled: { type: Boolean, default: false },
+      start: { type: String, default: '23:00' }, // HH:mm
+      end: { type: String, default: '07:00' }    // HH:mm
     }
   },
   {
