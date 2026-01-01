@@ -36,9 +36,14 @@ api.interceptors.response.use(
       // Token expired or invalid - logout user
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (globalThis.location) {
+      if (globalThis.location && globalThis.location.pathname !== '/') {
         globalThis.location.href = '/';
       }
+    }
+    // Don't log 404 errors for fired-reminders endpoint (expected when no reminders)
+    if (error.response?.status === 404 && error.config?.url?.includes('fired-reminders')) {
+      // Silently return empty data structure
+      return Promise.resolve({ data: { success: true, count: 0, data: [] } });
     }
     return Promise.reject(error);
   }

@@ -109,6 +109,13 @@ function App() {
   const checkPendingReminders = async () => {
     if (!isAuthenticated) return;
     
+    // Double-check authentication with token
+    const token = authService.isAuthenticated();
+    if (!token) {
+      setIsAuthenticated(false);
+      return;
+    }
+    
     try {
       // Fetch fired reminders from backend (need UI display)
       const response = await taskService.getFiredReminders();
@@ -154,7 +161,10 @@ function App() {
       }
       
     } catch (error) {
-      console.error('Error checking pending reminders:', error);
+      // Only log if it's not an authentication error (401)
+      if (error.response?.status !== 401) {
+        console.error('Error checking pending reminders:', error.message || error);
+      }
     }
   };
 
@@ -390,14 +400,23 @@ function App() {
    * Fetch all tasks from API
    */
   const fetchTasks = async () => {
+    // Check authentication before fetching
+    if (!isAuthenticated || !authService.isAuthenticated()) {
+      setLoading(false);
+      return;
+    }
+    
     try {
       setLoading(true);
       setError(null);
       const data = await taskService.getAllTasks();
       setTasks(data);
     } catch (err) {
-      setError('Failed to load tasks. Please check if the server is running.');
-      console.error('Error fetching tasks:', err);
+      // Only show error if it's not an authentication error
+      if (err.response?.status !== 401) {
+        setError('Failed to load tasks. Please check if the server is running.');
+        console.error('Error fetching tasks:', err.message || err);
+      }
     } finally {
       setLoading(false);
     }
