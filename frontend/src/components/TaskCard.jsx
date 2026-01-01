@@ -165,14 +165,14 @@ const TaskCard = ({ task, onToggleComplete, onDelete, onEdit, reminderAlert = fa
             onClick={() => onEdit(task)}
             title="Edit task"
           >
-            
+            ✏️
           </button>
           <button
             className="btn-icon btn-delete"
             onClick={() => onDelete(task._id)}
             title="Delete task"
           >
-            
+            🗑️
           </button>
         </div>
       </div>
