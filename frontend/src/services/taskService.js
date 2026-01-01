@@ -32,13 +32,29 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Handle network errors (ERR_CONNECTION_REFUSED, etc.)
+    if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+      // Silently handle network errors for fired-reminders
+      if (error.config?.url?.includes('fired-reminders')) {
+        return Promise.resolve({ data: { success: true, count: 0, data: [] } });
+      }
+      // For other endpoints, return a network error
+      console.error('Backend server is not running. Please start the server.');
+      return Promise.reject(error);
+    }
+    
     if (error.response?.status === 401) {
       // Token expired or invalid - logout user
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (globalThis.location) {
+      if (globalThis.location && globalThis.location.pathname !== '/') {
         globalThis.location.href = '/';
       }
+    }
+    // Don't log 404 errors for fired-reminders endpoint (expected when no reminders)
+    if (error.response?.status === 404 && error.config?.url?.includes('fired-reminders')) {
+      // Silently return empty data structure
+      return Promise.resolve({ data: { success: true, count: 0, data: [] } });
     }
     return Promise.reject(error);
   }
